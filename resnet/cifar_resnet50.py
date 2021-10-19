@@ -41,7 +41,7 @@ parser.add_argument('--device_num', type=int, default=1, help='Device num.')
 parser.add_argument('--epoch_size', type=int, default=50, help='Epoch size.')
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size.')
 parser.add_argument('--num_classes', type=int, default=2388, help='Num classes.')
-parser.add_argument('--device_target', type=str, default='GPU', help='Device choice Ascend or GPU')
+parser.add_argument('--device_target', type=str, default='CPU', help='Device choice Ascend or GPU')
 
 # 训练
 # parser.add_argument('--do_train', type=bool, default=True, help='Do train or not.')
@@ -52,8 +52,8 @@ parser.add_argument('--device_target', type=str, default='GPU', help='Device cho
 # 测试
 parser.add_argument('--do_train', type=bool, default=False, help='Do train or not.')
 parser.add_argument('--do_eval', type=bool, default=True, help='Do eval or not.')
-parser.add_argument('--checkpoint_path', type=str, default='train_resnet_cifar10-50_5388.ckpt', help='CheckPoint file path.')
-parser.add_argument('--dataset_path', type=str, default='/home/twang/test', help='Dataset path.')
+parser.add_argument('--checkpoint_path', type=str, default='D:/我的坚果云/Workspace/CCFBigData/train_resnet_cifar10-50_5388.ckpt', help='CheckPoint file path.')
+parser.add_argument('--dataset_path', type=str, default='D:/all/test', help='Dataset path.')
 
 args_opt = parser.parse_args()
 
