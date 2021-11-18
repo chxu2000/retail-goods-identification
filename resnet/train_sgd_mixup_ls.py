@@ -1,3 +1,4 @@
+# encoding: utf-8
 # Copyright 2020 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,23 +28,29 @@ import mindspore.dataset.transforms.c_transforms as C2
 import mindspore.dataset.vision.py_transforms as P
 from mindspore.nn import SoftmaxCrossEntropyWithLogits
 from mindspore.communication import init
-from mindspore.nn import Momentum, Adam, AdamWeightDecay
+from mindspore.nn import Momentum, Adam, AdamWeightDecay, SGD
 from mindspore import Model, context
 from mindspore import common
 from mindspore.context import ParallelMode
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor
 from mindspore import load_checkpoint, load_param_into_net
 from resnet import resnet50
+import mindspore.nn as nn
+from mindspore import Tensor
+from mindspore.common import dtype as mstype
+from mindspore.nn.loss import LossBase
+from mindspore.ops import functional as F
+from mindspore.ops import operations as P
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4,6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2, 3, 4, 6"
 DEVICE_NUM = 4
 EPOCH_PER_CKPT = 5
 common.set_seed(1)
 # random.seed(1)
 
 parser = argparse.ArgumentParser(description='Image classification')
-parser.add_argument('--run_distribute', type=bool, default=False, help='Run distribute.')
+parser.add_argument('--run_distribute', type=bool, default=DEVICE_NUM>1, help='Run distribute.')
 parser.add_argument('--device_num', type=int, default=DEVICE_NUM, help='Device num.')
 parser.add_argument('--epoch_size', type=int, default=100, help='Epoch size.')
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size.')
@@ -53,14 +60,29 @@ parser.add_argument('--device_target', type=str, default='GPU', help='Device cho
 # 训练
 parser.add_argument('--do_train', type=bool, default=True, help='Do train or not.')
 parser.add_argument('--do_eval', type=bool, default=False, help='Do eval or not.')
-parser.add_argument('--checkpoint_path', type=str, default=None, help='CheckPoint file path.')
+parser.add_argument('--checkpoint_path', type=str, default='/data/home/twang/BDCI2021/checkpoint/ckpt_sgd_mixup_ls/train_resnet_sgd_mixup_ls-100_673.ckpt', help='CheckPoint file path.')
 parser.add_argument('--dataset_path', type=str, default='/home/twang/BDCI2021/train', help='Dataset path.')
-# init("nccl")
+init("nccl")
 
 args_opt = parser.parse_args()
 data_home = args_opt.dataset_path
 context.set_context(mode=context.GRAPH_MODE, device_target=args_opt.device_target)
 
+class CrossEntropySmooth(LossBase):
+    """CrossEntropy"""
+    def __init__(self, sparse=False, reduction='mean', smooth_factor=0.1, num_classes=2388):
+        super(CrossEntropySmooth, self).__init__()
+        self.onehot = P.OneHot()
+        self.sparse = sparse
+        self.on_value = Tensor(1.0 - smooth_factor, mstype.float32)
+        self.off_value = Tensor(1.0 * smooth_factor / (num_classes - 1), mstype.float32)
+        self.ce = nn.SoftmaxCrossEntropyWithLogits(reduction=reduction)
+
+    def construct(self, logit, label):
+        if self.sparse:
+            label = self.onehot(label, F.shape(logit)[1], self.on_value, self.off_value)
+        loss = self.ce(logit, label)
+        return loss
 
 def create_dataset(repeat_num=1, training=True):
     
@@ -97,14 +119,19 @@ def create_dataset(repeat_num=1, training=True):
 if __name__ == '__main__':
     # in this way by judging the mark of args, users will decide which function to use
     if not args_opt.do_eval and args_opt.run_distribute:
-        context.set_auto_parallel_context(device_num=args_opt.device_num, parallel_mode=ParallelMode.AUTO_PARALLEL,
+        context.set_auto_parallel_context(device_num=args_opt.device_num, parallel_mode=ParallelMode.DATA_PARALLEL,
                                           all_reduce_fusion_config=[140])
         init()
 
     epoch_size = args_opt.epoch_size
     net = resnet50(args_opt.batch_size, args_opt.num_classes)
-    ls = SoftmaxCrossEntropyWithLogits(sparse=False, reduction="mean")
-    opt = Adam(filter(lambda x: x.requires_grad, net.get_parameters()), 0.01, 0.9)
+    if (args_opt.checkpoint_path):
+        param_dict = load_checkpoint(args_opt.checkpoint_path)
+        load_param_into_net(net, param_dict)
+    # ls = SoftmaxCrossEntropyWithLogits(sparse=False, reduction="mean")
+    ls = CrossEntropySmooth(sparse=False, reduction="mean")
+    # opt = Momentum(filter(lambda x: x.requires_grad, net.get_parameters()), 0.01, 0.9)
+    opt = SGD(filter(lambda x: x.requires_grad, net.get_parameters()), 0.01, 0.9)
     model = Model(net, loss_fn=ls, optimizer=opt, metrics={'acc'})
 
     # as for train, users could use model.train
@@ -112,11 +139,11 @@ if __name__ == '__main__':
         dataset = create_dataset()
         batch_num = dataset.get_dataset_size()
 
-        config_ck = CheckpointConfig(save_checkpoint_steps=batch_num * EPOCH_PER_CKPT, keep_checkpoint_max=30)
-        ckpoint_cb = ModelCheckpoint(prefix="train_resnet-mixup", directory="/home/twang/train_mixup_2021-11-7", config=config_ck)
+        config_ck = CheckpointConfig(save_checkpoint_steps=batch_num * EPOCH_PER_CKPT, keep_checkpoint_max=50)
+        ckpoint_cb = ModelCheckpoint(prefix="train_resnet_sgd_mixup_ls", directory="/home/twang/BDCI2021/checkpoint/ckpt_sgd_mixup_ls", config=config_ck)
 
         # param_dict = load_checkpoint(args_opt.checkpoint_path)
         # load_param_into_net(net, param_dict)
-
+        
         loss_cb = LossMonitor()
         model.train(epoch_size, dataset, callbacks=[ckpoint_cb, loss_cb])

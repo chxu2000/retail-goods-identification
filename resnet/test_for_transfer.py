@@ -33,6 +33,11 @@ from mindspore import common
 from mindspore.context import ParallelMode
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor
 from mindspore import load_checkpoint, load_param_into_net
+
+import mindspore_hub as mshub
+from mindspore import Parameter, Tensor, numpy as np
+
+
 from resnet import resnet50
 import cv2
 from mindspore.dataset.transforms.c_transforms import Compose
@@ -48,7 +53,7 @@ parser.add_argument('--num_classes', type=int, default=2388, help='Num classes.'
 parser.add_argument('--device_target', type=str, default='GPU', help='Device choice Ascend or GPU')
 parser.add_argument('--do_train', type=bool, default=False, help='Do train or not.')
 parser.add_argument('--do_eval', type=bool, default=True, help='Do eval or not.')
-parser.add_argument('--checkpoint_path', type=str, default='/data/home/twang/BDCI2021/checkpoint/ckpt_transfer/train_resnet_transfer-5_2694.ckpt', help='CheckPoint file path.')
+parser.add_argument('--checkpoint_path', type=str, default='/home/twang/BDCI2021/checkpoint/ckpt_transfer/train_resnet_transfer_1-1_2694.ckpt', help='CheckPoint file path.')
 parser.add_argument('--dataset_path', type=str, default=data_home, help='Dataset path.')
 # init("nccl")
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -185,6 +190,28 @@ if __name__ == '__main__':
         param_dict = load_checkpoint(args_opt.checkpoint_path)
         load_param_into_net(net, param_dict)
 
+#############################
+    # model_name = "mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012"
+    # net = mshub.load(model_name, class_num=2388, force_reload=False)
+    # ls = SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
+    # opt = Momentum(filter(lambda x: x.requires_grad, net.get_parameters()), 0.01, 0.9)
+
+    # param_dict = load_checkpoint("/home/twang/BDCI2021/checkpoint/ckpt_transfer/train_resnet_transfer-40_2694.ckpt")
+    # modWeight = Parameter(Tensor(np.ones((2388, 2048)), mstype.float32), name="moments.end_point.weight", requires_grad=True)
+    # modBias = Parameter(Tensor(np.ones((2388)), mstype.float32), name="moments.end_point.bias", requires_grad=True)
+    # param_dict['end_point.weight']=modWeight
+    # param_dict['end_point.bias']=modBias
+    # load_param_into_net(net, param_dict)
+    # net.set_train(True)
+
+    # model = Model(net, loss_fn=ls, optimizer=opt, metrics={'acc'})
+#############################
+
+
+
+
+
+
     # 原版测试方法
     eval_dataset = create_dataset(training=False)
     res = model.eval(eval_dataset)
@@ -193,4 +220,3 @@ if __name__ == '__main__':
 
     # TTA测试方法
     # TTA(model)
-    

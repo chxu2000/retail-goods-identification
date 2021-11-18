@@ -18,26 +18,34 @@ This sample code is applicable to Ascend.
 import os
 import random
 import argparse
+import logging
+import mindspore
 from mindspore import dtype as mstype
 import mindspore.dataset as ds
 import mindspore.dataset.vision.c_transforms as C
 import mindspore.dataset.transforms.c_transforms as C2
+import mindspore.dataset.vision.py_transforms as P
 from mindspore.nn import SoftmaxCrossEntropyWithLogits
 from mindspore.communication import init
-from mindspore.nn import Momentum, Adam
+from mindspore.nn import Momentum, Adam, AdamWeightDecay
 from mindspore import Model, context
 from mindspore import common
 from mindspore.context import ParallelMode
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor
 from mindspore import load_checkpoint, load_param_into_net
 from resnet import resnet50
-import logging
+import mindspore.nn as nn
+from mindspore import Tensor
+from mindspore.common import dtype as mstype
+from mindspore.nn.loss import LossBase
+from mindspore.ops import functional as F
+from mindspore.ops import operations as P
 
-DEVICE_NUM = 4
+
+DEVICE_NUM = 1
 EPOCH_PER_CKPT = 1
-kfold_num = 4
-
-common.set_seed(1)
+# common.set_seed(1)
+random.seed(1)
 
 parser = argparse.ArgumentParser(description='Image classification')
 parser.add_argument('--run_distribute', type=bool, default=False, help='Run distribute.')
@@ -52,25 +60,30 @@ parser.add_argument('--do_train', type=bool, default=True, help='Do train or not
 parser.add_argument('--do_eval', type=bool, default=False, help='Do eval or not.')
 parser.add_argument('--checkpoint_path', type=str, default=None, help='CheckPoint file path.')
 parser.add_argument('--dataset_path', type=str, default='/home/twang/BDCI2021/train', help='Dataset path.')
-init("nccl")
-
-# 测试
-# parser.add_argument('--do_train', type=bool, default=False, help='Do train or not.')
-# parser.add_argument('--do_eval', type=bool, default=True, help='Do eval or not.')
-# parser.add_argument('--checkpoint_path', type=str, default='bdci_resnet_5388.ckpt', help='CheckPoint file path.')
-# parser.add_argument('--dataset_path', type=str, default='/home/twang/BDCI2021/test-new', help='Dataset path.')
-# os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+# init("nccl")
 
 args_opt = parser.parse_args()
 data_home = args_opt.dataset_path
 context.set_context(mode=context.GRAPH_MODE, device_target=args_opt.device_target)
 
+class CrossEntropySmooth(LossBase):
+    """CrossEntropy"""
+    def __init__(self, sparse=False, reduction='mean', smooth_factor=0.1, num_classes=2388):
+        super(CrossEntropySmooth, self).__init__()
+        self.onehot = P.OneHot()
+        self.sparse = sparse
+        self.on_value = Tensor(1.0 - smooth_factor, mstype.float32)
+        self.off_value = Tensor(1.0 * smooth_factor / (num_classes - 1), mstype.float32)
+        self.ce = nn.SoftmaxCrossEntropyWithLogits(reduction=reduction)
+
+    def construct(self, logit, label):
+        if self.sparse:
+            label = self.onehot(label, F.shape(logit)[1], self.on_value, self.off_value)
+        loss = self.ce(logit, label)
+        return loss
+
 def create_dataset(repeat_num=1, training=True):
-    """
-
-    create data for next use such as training or inferring
-
-    """
+    
     assert os.path.exists(data_home), "the dataset path is invalid!"
     if args_opt.run_distribute:
         rank_id = 0
@@ -78,36 +91,25 @@ def create_dataset(repeat_num=1, training=True):
         cifar_ds = ds.ImageFolderDataset(data_home, decode=True, shuffle=True, num_shards=rank_size, shard_id=rank_id)
     else:
         cifar_ds = ds.ImageFolderDataset(data_home, decode=True, shuffle=True)
-
+ 
     resize_height = 224
     resize_width = 224
-
-    # resize_op = C.Resize((resize_height, resize_width)) # interpolation default BILINEAR
-    # colorAdjust_op = C.RandomColorAdjust(brightness=(0.1, 1),contrast=(0.1, 1),saturation=(0.1, 1))
-    # gaussianBlur_op = C.GaussianBlur(3, 3)
-    # random_vertical_op = C.RandomVerticalFlip(prob=0.5)
-    # random_horizontal_op = C.RandomHorizontalFlip(prob=0.5)
-    # random_rotation_op = C.RandomRotation(degrees = 15)
-    # rescale_op = C.Rescale(rescale = 1.0/255.0, shift = 0.0)
-    # normalize_op = C.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))   ###均值和方差不一样 存在问题
-    # changeswap_op = C.HWC2CHW()
-    # cifar_ds = cifar_ds.map(operations=
-    #     [resize_op, colorAdjust_op,gaussianBlur_op,random_vertical_op,random_horizontal_op,random_rotation_op,
-    #     rescale_op,normalize_op,changeswap_op], 
-    #     input_columns=["image"], output_columns=["image"])
-
     rescale = 1.0 / 255.0
     shift = 0.0
     random_horizontal_op = C.RandomHorizontalFlip()
     resize_op = C.Resize((resize_height, resize_width)) # interpolation default BILINEAR
     rescale_op = C.Rescale(rescale, shift)
     normalize_op = C.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    changeswap_op = C.HWC2CHW()
-    cifar_ds = cifar_ds.map(operations=[random_horizontal_op, resize_op,rescale_op,normalize_op,changeswap_op], input_columns=["image"], output_columns=["image"])
+    changeswap_op = C.HWC2CHW() 
+    onehot_op = C2.OneHot(num_classes=2388)
 
+    cifar_ds = cifar_ds.map(operations=[random_horizontal_op, resize_op, rescale_op, normalize_op, changeswap_op], input_columns=["image"], output_columns=["image"])
+    # cifar_ds = cifar_ds.map(operations=onehot_op, input_columns=["label"], output_columns=["label"])
     # Declare an apply_func function which returns a Dataset object
     def apply_func(data):
         data = data.batch(args_opt.batch_size,True)
+        # mixup_op = C.MixUpBatch(alpha=0.5)
+        # data = data.map(operations=mixup_op, input_columns=["image", "label"], output_columns=["image", "label"])
         return data
     cifar_ds = cifar_ds.apply(apply_func)
     return cifar_ds
@@ -121,47 +123,23 @@ if __name__ == '__main__':
 
     epoch_size = args_opt.epoch_size
     net = resnet50(args_opt.batch_size, args_opt.num_classes)
-    ls = SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
+    # ls = SoftmaxCrossEntropyWithLogits(sparse=False, reduction="mean")
+    ls = CrossEntropySmooth(sparse=True, reduction="mean")
+
+
     opt = Adam(filter(lambda x: x.requires_grad, net.get_parameters()), 0.01, 0.9)
     model = Model(net, loss_fn=ls, optimizer=opt, metrics={'acc'})
 
     # as for train, users could use model.train
     if args_opt.do_train:
-        datasets = create_dataset()
-        sizes = [1/kfold_num]*kfold_num
-        groups = datasets.split(sizes, randomize=True)
-        batch_num = datasets.get_dataset_size()
-        validation_res_list = []
-        for fold in range(kfold_num):
-            config_ck = CheckpointConfig(save_checkpoint_steps=batch_num*EPOCH_PER_CKPT, keep_checkpoint_max=30)
-            ckpoint_cb = ModelCheckpoint(prefix="train_resnet_distribute", directory="./distribute_train", config=config_ck)
-            loss_cb = LossMonitor()
-            validation_data = None
-            for group in groups[fold:(fold+1)]:
-                if validation_data is None:
-                    validation_data = group
-                else:
-                    validation_data = validation_data + group
-            training_data = None
-            for group in groups[:fold] + groups[(fold+1):]:
-                if training_data is None:
-                    training_data = group
-                else:
-                    training_data = training_data + group
-            model.train(epoch_size, training_data, callbacks=[ckpoint_cb, loss_cb])
-            training_res = model.eval(training_data)
-            validation_res = model.eval(validation_data)
-            print("training result: ", training_res)
-            validation_res_list.append(validation_res_list)
-        validation_res = np.average(validation_res)
-        print("validation result: ", validation_res)
+        dataset = create_dataset()
+        batch_num = dataset.get_dataset_size()
 
-    # as for evaluation, users could use model.eval
-    if args_opt.do_eval:
-        if args_opt.checkpoint_path:
-            param_dict = load_checkpoint(args_opt.checkpoint_path)
-            load_param_into_net(net, param_dict)
-        eval_dataset = create_dataset(training=False)
-        res = model.eval(eval_dataset)
-        print("result: ", res)
-        logging.info("result: ", res)
+        config_ck = CheckpointConfig(save_checkpoint_steps=batch_num * EPOCH_PER_CKPT, keep_checkpoint_max=30)
+        ckpoint_cb = ModelCheckpoint(prefix="train_resnet-mixup", directory="/home/twang/train_mixup_2021-11-7", config=config_ck)
+
+        # param_dict = load_checkpoint(args_opt.checkpoint_path)
+        # load_param_into_net(net, param_dict)
+
+        loss_cb = LossMonitor()
+        model.train(epoch_size, dataset, callbacks=[ckpoint_cb, loss_cb])

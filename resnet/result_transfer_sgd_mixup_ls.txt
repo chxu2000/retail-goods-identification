@@ -1,0 +1,20 @@
+epoch: 5
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+result:  {'acc_without_others': 0.9670758928571429, 'acc': 0.9572849025974026}
+epoch: 10
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+result:  {'acc_without_others': 0.969434862012987, 'acc': 0.9652749594155844}
+epoch: 15
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+result:  {'acc_without_others': 0.9712104301948052, 'acc': 0.966796875}
+epoch: 20
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+result:  {'acc': 0.9670505275974026, 'acc_without_others': 0.9713118912337663}
+epoch: 25
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+Checking /home/twang/.mscache/mindspore/ascend/1.2/resnet50thorcp_v1.2_imagenet2012.md...[1;32mPassed![0m
+result:  {'acc': 0.9697899756493507, 'acc_without_others': 0.9742288961038961}

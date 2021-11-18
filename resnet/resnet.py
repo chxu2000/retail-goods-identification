@@ -295,9 +295,13 @@ class ResNet(nn.Cell):
         x = self.maxpool(x)
 
         x = self.layer1(x)
+        x1 = x
         x = self.layer2(x)
+        x2 = x
         x = self.layer3(x)
+        x3 = x
         x = self.layer4(x)
+        x4 = x
 
         x = self.pool(x, (2, 3))
         x = self.squeeze(x)
