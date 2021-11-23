@@ -35,6 +35,7 @@ from src.efficientnet import efficientnet_b0
 from src.loss import LabelSmoothingCrossEntropy
 
 EPOCH_PER_CKPT = 3
+
 mindspore.common.set_seed(basic_config.random_seed)
 random.seed(basic_config.random_seed)
 np.random.seed(basic_config.random_seed)
@@ -78,7 +79,7 @@ def main():
 
     rank_id, rank_size = 0, 1
     context.set_context(mode=context.GRAPH_MODE)
-    
+
     if args.platform == "GPU":
         dataset_sink_mode = True
         # context.set_context(device_target='GPU', enable_graph_kernel=True)
@@ -170,4 +171,5 @@ def main():
 
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     main()

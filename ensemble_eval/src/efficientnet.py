@@ -708,7 +708,7 @@ def _gen_efficientnet(channel_multiplier=1.0, depth_multiplier=1.0, num_classes=
     return model
 
 
-def efficientnet_b0(num_classes=2388, in_chans=3, cfg=None, **kwargs):
+def efficientnet_b0(num_classes=1000, in_chans=3, cfg=None, **kwargs):
     """ EfficientNet-B0 """
     default_cfg = default_cfgs['efficientnet_b0']
     default_cfg["num_classes"] = num_classes

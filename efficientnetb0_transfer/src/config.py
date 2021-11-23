@@ -34,7 +34,7 @@ efficientnet_b0_config_bdci = EasyDict({
     'warmup_epochs': 5,
     'decay_rate': 0.97,
     'weight_decay': 1e-5,
-    'epochs': 80,
+    'epochs': 50,
     'workers': 8,
     'amp_level': 'O0',
     'opt': 'rmsprop',

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Download Pretrain Checkpoint
+cd ../ckpt_transfer
+wget https://download.mindspore.cn/model_zoo/r1.1/shufflenetv2_GPU_v111_imagenet2012_offical_cv_bs256_acc69/shufflenetv2_GPU_v111_imagenet2012_offical_cv_bs256_acc69.ckpt
+wget https://download.mindspore.cn/model_zoo/r1.2/resnet50thorcp_ascend_v120_imagenet2012_official_cv_bs256_acc76/resnet50thorcp_ascend_v120_imagenet2012_official_cv_bs256_acc76.ckpt
+wget https://download.mindspore.cn/model_zoo/r1.1/efficientnet_GPU_v111_imagenet_offical_cv_bs128_loss3/efficientnet_GPU_v111_imagenet_offical_cv_bs128_loss3.ckpt
